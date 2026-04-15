@@ -1,0 +1,30 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: notification-service
+  mail:
+    host: email-smtp.ap-south-1.amazonaws.com
+    port: 587
+    username: ${SES_USERNAME}
+    password: ${SES_PASSWORD}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+  mail.from: noreply@shopwave.com
+
+aws:
+  region: ap-south-1
+  sqs:
+    order-events-queue: ecommerce-order-events
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true

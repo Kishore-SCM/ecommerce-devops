@@ -1,0 +1,40 @@
+version: '3.9'
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment: { POSTGRES_DB: ecommerce, POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres }
+    ports: ["5432:5432"]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+  sonarqube:
+    image: sonarqube:lts-community
+    ports: ["9000:9000"]
+    environment: { SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true" }
+  product-service:
+    build: { context: ., dockerfile: product-service/Dockerfile }
+    ports: ["8081:8081"]
+    environment: { SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/ecommerce", SPRING_DATASOURCE_PASSWORD: postgres, REDIS_HOST: redis }
+    depends_on: [postgres, redis]
+  order-service:
+    build: { context: ., dockerfile: order-service/Dockerfile }
+    ports: ["8082:8082"]
+    environment: { SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/ecommerce", SPRING_DATASOURCE_PASSWORD: postgres, PRODUCT_SERVICE_URL: "http://product-service:8081" }
+    depends_on: [postgres, product-service]
+  user-service:
+    build: { context: ., dockerfile: user-service/Dockerfile }
+    ports: ["8083:8083"]
+    environment: { SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/ecommerce", SPRING_DATASOURCE_PASSWORD: postgres, JWT_SECRET: your-super-secret-jwt-key-minimum-32-characters, JWT_EXPIRY: "86400000" }
+    depends_on: [postgres]
+  api-gateway:
+    build: { context: ., dockerfile: api-gateway/Dockerfile }
+    ports: ["8080:8080"]
+    environment: { REDIS_HOST: redis, JWT_SECRET: your-super-secret-jwt-key-minimum-32-characters }
+    depends_on: [product-service, order-service, user-service, redis]
+  frontend:
+    build: { context: ./frontend, dockerfile: Dockerfile }
+    ports: ["3000:80"]
+    depends_on: [api-gateway]
+volumes:
+  postgres_data:

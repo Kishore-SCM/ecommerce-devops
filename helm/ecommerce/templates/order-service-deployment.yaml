@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  labels:
+    app: order-service
+spec:
+  replicas: {{ .Values.orderService.replicaCount }}
+  selector:
+    matchLabels:
+      app: order-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 1, maxSurge: 1 }
+  template:
+    metadata:
+      labels:
+        app: order-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path:   "/actuator/prometheus"
+        prometheus.io/port:   "8082"
+    spec:
+      containers:
+        - name: order-service
+          image: {{ .Values.global.registry }}/order-service:{{ .Values.global.imageTag }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 8082
+          env:
+            - name: SPRING_DATASOURCE_URL
+              valueFrom:
+                secretKeyRef: { name: db-secret, key: url }
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: db-secret, key: password }
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: jwt-secret, key: secret }
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: redis-host }
+            - name: SPRING_PROFILES_ACTIVE
+              value: production
+          resources:
+            {{- toYaml .Values.orderService.resources | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8082 }
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8082 }
+            initialDelaySeconds: 30
+            periodSeconds: 5
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - { key: app, operator: In, values: [order-service] }
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+spec:
+  selector:
+    app: order-service
+  ports:
+    - port: 8082
+      targetPort: 8082
+  type: ClusterIP

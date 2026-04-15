@@ -1,0 +1,75 @@
+global:
+  registry:        ""
+  imageTag:        "latest"
+  imagePullPolicy: Always
+  domain:          ecommerce.example.com
+
+productService:
+  replicaCount: 3
+  image:
+    repository: product-service
+  resources:
+    requests: { cpu: 200m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+orderService:
+  replicaCount: 3
+  image:
+    repository: order-service
+  resources:
+    requests: { cpu: 200m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+userService:
+  replicaCount: 2
+  image:
+    repository: user-service
+  resources:
+    requests: { cpu: 150m, memory: 256Mi }
+    limits:   { cpu: 400m, memory: 512Mi }
+
+apiGateway:
+  replicaCount: 2
+  image:
+    repository: api-gateway
+  service:
+    type: ClusterIP
+    port: 8080
+
+notificationService:
+  replicaCount: 1
+  image:
+    repository: notification-service
+
+frontend:
+  replicaCount: 2
+  image:
+    repository: frontend
+  service:
+    type: ClusterIP
+    port: 80
+
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:ap-south-1:ACCOUNT:certificate/CERT-ID"
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+  hosts:
+    - host: ecommerce.example.com
+      paths:
+        - { path: /api, pathType: Prefix, service: api-gateway, port: 8080 }
+        - { path: /,    pathType: Prefix, service: frontend,    port: 80   }

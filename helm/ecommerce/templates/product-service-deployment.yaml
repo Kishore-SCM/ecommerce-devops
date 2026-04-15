@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+  labels:
+    app: product-service
+spec:
+  replicas: {{ .Values.productService.replicaCount }}
+  selector:
+    matchLabels:
+      app: product-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 1, maxSurge: 1 }
+  template:
+    metadata:
+      labels:
+        app: product-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path:   "/actuator/prometheus"
+        prometheus.io/port:   "8081"
+    spec:
+      containers:
+        - name: product-service
+          image: {{ .Values.global.registry }}/product-service:{{ .Values.global.imageTag }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 8081
+          env:
+            - name: SPRING_DATASOURCE_URL
+              valueFrom:
+                secretKeyRef: { name: db-secret, key: url }
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: db-secret, key: password }
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: jwt-secret, key: secret }
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: redis-host }
+            - name: SPRING_PROFILES_ACTIVE
+              value: production
+          resources:
+            {{- toYaml .Values.productService.resources | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8081 }
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8081 }
+            initialDelaySeconds: 30
+            periodSeconds: 5
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - { key: app, operator: In, values: [product-service] }
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+spec:
+  selector:
+    app: product-service
+  ports:
+    - port: 8081
+      targetPort: 8081
+  type: ClusterIP
